@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.902
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{803FD0C6-D64E-4E16-9DC3-1DAEC859A3D2}") = "ESP32_ProtocolConverter_Firmware", "ESP32_ProtocolConverter_Firmware.vgdbproj", "{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|VisualGDB = Debug|VisualGDB
+		MinSizeRel|VisualGDB = MinSizeRel|VisualGDB
+		Release|VisualGDB = Release|VisualGDB
+		RelWithDebInfo|VisualGDB = RelWithDebInfo|VisualGDB
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.Debug|VisualGDB.ActiveCfg = Debug|VisualGDB
+		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.Debug|VisualGDB.Build.0 = Debug|VisualGDB
+		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.MinSizeRel|VisualGDB.ActiveCfg = MinSizeRel|VisualGDB
+		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.MinSizeRel|VisualGDB.Build.0 = MinSizeRel|VisualGDB
+		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.Release|VisualGDB.ActiveCfg = Release|VisualGDB
+		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.Release|VisualGDB.Build.0 = Release|VisualGDB
+		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.RelWithDebInfo|VisualGDB.ActiveCfg = RelWithDebInfo|VisualGDB
+		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.RelWithDebInfo|VisualGDB.Build.0 = RelWithDebInfo|VisualGDB
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CE53A2C9-95DD-445D-85C6-FFE5F4844C60}
+	EndGlobalSection
+EndGlobal
