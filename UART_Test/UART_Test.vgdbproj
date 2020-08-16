@@ -1,12 +1,13 @@
 <?xml version="1.0"?>
 <VisualGDBProjectSettings2 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <ConfigurationName>Debug</ConfigurationName>
   <Project xsi:type="com.visualgdb.project.external.esp-idf">
     <CustomSourceDirectories>
       <Directories />
       <PathStyle>Unknown</PathStyle>
     </CustomSourceDirectories>
     <ProjectModeSettings>
-      <ProjectGUID>8c24b8a5-631f-4f66-8041-9afb871a0157</ProjectGUID>
+      <ProjectGUID>c1f43eef-bf8b-4be3-9cb6-074aa7253740</ProjectGUID>
       <GroupSourcesByTypes>true</GroupSourcesByTypes>
       <GroupSourcesByPaths>true</GroupSourcesByPaths>
       <HeaderScanMode>SourceDirs</HeaderScanMode>
@@ -21,16 +22,25 @@
         <Revision>16</Revision>
       </Version>
     </ToolchainID>
+    <RelativeSourceDirectory />
     <ConfigurationType>DEBUG</ConfigurationType>
     <BinaryDirectory>VisualGDB/$(ConfigurationName)</BinaryDirectory>
     <MakeCommandTemplate>
       <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
+      <RemoteHost>
+        <HostName>BuildMachine</HostName>
+        <Transport>BuiltinShortcut</Transport>
+      </RemoteHost>
       <Command>$(VISUALGDB_DIR)/ninja.exe</Command>
       <WorkingDirectory>$(BuildDir)</WorkingDirectory>
       <BackgroundMode xsi:nil="true" />
     </MakeCommandTemplate>
     <CMakeCommand>
       <SkipWhenRunningCommandList>false</SkipWhenRunningCommandList>
+      <RemoteHost>
+        <HostName>BuildMachine</HostName>
+        <Transport>BuiltinShortcut</Transport>
+      </RemoteHost>
       <Command>$(SYSPROGS_CMAKE_PATH)</Command>
       <BackgroundMode xsi:nil="true" />
     </CMakeCommand>
@@ -52,8 +62,9 @@
         <BuildAllTargetsInSubdir>false</BuildAllTargetsInSubdir>
         <FoldSingleItemPathLevels>true</FoldSingleItemPathLevels>
       </ProjectItemSettings>
+      <TargetSpecificSettings />
       <SetLDLibraryPathFromDependentArtifacts>true</SetLDLibraryPathFromDependentArtifacts>
-      <ProjectGUID>b1e99ef7-aacf-46a8-9914-6d3d255a09ae</ProjectGUID>
+      <ProjectGUID>756f6928-5ea6-49f7-a039-bce53728209e</ProjectGUID>
       <VirtualFolders />
       <ConfigurationNameCase>Upper</ConfigurationNameCase>
       <DefaultHeaderDiscoveryMode>HeaderDirectoryAndSubdirectories</DefaultHeaderDiscoveryMode>
@@ -62,6 +73,8 @@
           <Version>release/v3.2</Version>
           <Subdirectory>esp-idf/v3.2</Subdirectory>
         </IDFCheckout>
+        <COMPort>COM3</COMPort>
+        <BaudRate>115200</BaudRate>
       </ESPIDFExtension>
     </ProjectModeSettings>
   </Build>
@@ -83,6 +96,7 @@
     <ShowMessageAfterExecuting>true</ShowMessageAfterExecuting>
   </CustomShortcuts>
   <UserDefinedVariables />
+  <ImportedPropertySheets />
   <CodeSense>
     <Enabled>Unknown</Enabled>
     <ExtraSettings>
@@ -113,6 +127,7 @@
       </BuildSettingsExtension>
     </VisualGDBConfiguration>
   </Configurations>
+  <ProgramArgumentsSuggestions />
   <Debug xsi:type="com.visualgdb.debug.embedded">
     <AdditionalStartupCommands />
     <AdditionalGDBSettings>
@@ -155,7 +170,7 @@
           <ConnectUnderReset>false</ConnectUnderReset>
         </ExtraParameters>
         <LoadProgressGUIThreshold>131072</LoadProgressGUIThreshold>
-        <ProgramMode>Enabled</ProgramMode>
+        <ProgramMode>Auto</ProgramMode>
         <StartupCommands>
           <string>set remotetimeout 60</string>
           <string>target remote :$$SYS:GDB_PORT$$</string>

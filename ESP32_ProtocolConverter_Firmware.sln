@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.902
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{803FD0C6-D64E-4E16-9DC3-1DAEC859A3D2}") = "ESP32_ProtocolConverter_Firmware", "ESP32_ProtocolConverter_Firmware.vgdbproj", "{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}"
+Project("{803FD0C6-D64E-4E16-9DC3-1DAEC859A3D2}") = "ESP32_ProtocolConverter_Firmware", "ESP32_ProtocolConverter_Firmware\ESP32_ProtocolConverter_Firmware.vgdbproj", "{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}"
+EndProject
+Project("{803FD0C6-D64E-4E16-9DC3-1DAEC859A3D2}") = "UART_Test", "UART_Test\UART_Test.vgdbproj", "{756F6928-5EA6-49F7-A039-BCE53728209E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,14 @@ Global
 		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.Release|VisualGDB.Build.0 = Release|VisualGDB
 		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.RelWithDebInfo|VisualGDB.ActiveCfg = RelWithDebInfo|VisualGDB
 		{B1E99EF7-AACF-46A8-9914-6D3D255A09AE}.RelWithDebInfo|VisualGDB.Build.0 = RelWithDebInfo|VisualGDB
+		{756F6928-5EA6-49F7-A039-BCE53728209E}.Debug|VisualGDB.ActiveCfg = Debug|VisualGDB
+		{756F6928-5EA6-49F7-A039-BCE53728209E}.Debug|VisualGDB.Build.0 = Debug|VisualGDB
+		{756F6928-5EA6-49F7-A039-BCE53728209E}.MinSizeRel|VisualGDB.ActiveCfg = MinSizeRel|VisualGDB
+		{756F6928-5EA6-49F7-A039-BCE53728209E}.MinSizeRel|VisualGDB.Build.0 = MinSizeRel|VisualGDB
+		{756F6928-5EA6-49F7-A039-BCE53728209E}.Release|VisualGDB.ActiveCfg = Release|VisualGDB
+		{756F6928-5EA6-49F7-A039-BCE53728209E}.Release|VisualGDB.Build.0 = Release|VisualGDB
+		{756F6928-5EA6-49F7-A039-BCE53728209E}.RelWithDebInfo|VisualGDB.ActiveCfg = RelWithDebInfo|VisualGDB
+		{756F6928-5EA6-49F7-A039-BCE53728209E}.RelWithDebInfo|VisualGDB.Build.0 = RelWithDebInfo|VisualGDB
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
