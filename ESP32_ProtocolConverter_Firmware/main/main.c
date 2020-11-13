@@ -7,13 +7,16 @@
 #include "Task_APP.h"
 #include "Task_PRO.h"
 
-TaskHandle_t APP_TASK;
 TaskHandle_t PRO_TASK;
+TaskHandle_t APP_TASK;
 
 void app_main()
 {
-	xTaskCreatePinnedToCore(vAppTask, "CORE0_APP_TASK", 2048, NULL, 12, &APP_TASK, 0);
-	xTaskCreatePinnedToCore(vProTask, "CORE1_PRO_TASK", 2048, NULL, 12, &PRO_TASK, 1);
+	//printSemaphore = xSemaphoreCreateMutex();
 	
+	xTaskCreatePinnedToCore(vProTask, "CORE1_PRO_TASK", 8192, NULL, 16, &PRO_TASK, PROTOCOL_CORE);
+	xTaskCreatePinnedToCore(vAppTask, "CORE0_APP_TASK", 8192, NULL, 12, &APP_TASK, APP_CORE);
+	
+	vTaskDelay(100 / portTICK_PERIOD_MS);
 	vTaskDelete(NULL);
 }

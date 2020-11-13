@@ -11,25 +11,38 @@
 
 static const char *TAG = "UART_Interface";
 
-static const char* COMMANDS[8] = 
+static const char* COMMANDS[10] = 
 {
-	"",				// NOP
-	"STATUS",		// Queries status&connection information
-	"PING",			// Returns "PONG", a quick check if an interface adapter is listening on the COM port
-	//"SPEEDTEST",	// Test the connection speed
-	"CONNECT",		// Puts the adapter in connected state
-	"DISCONNECT",	// Puts the adapter in disconnected state
-	"REFRESH",		// Refreshes existing connection
-	"DATA",			// Updates the program
-	"TRIGGER",		// Ativates a manual trigger
+	"",
+	// NOP
+"STATUS",
+	// Queries status&connection information
+"QUERY",
+	// Queries function & register information
+"ALLOC_FUNCTIONS",
+	// Requests memory allocation for functions
+"PING",
+	// Returns "PONG", a quick check if an interface adapter is listening on the COM port
+//"SPEEDTEST",		// Test the connection speed
+"CONNECT", 
+	// Puts the adapter in connected state
+"DISCONNECT",
+	// Puts the adapter in disconnected state
+"REFRESH",
+	// Refreshes existing connection
+"DATA",
+	// Updates the program
+"TRIGGER", 
+	// Ativates a manual trigger
 };
 
 uint8_t rxbuf[2048];
 uint16_t dataStart, urxlen;
 ConnectionState connectionState = Disconnected;
 TaskHandle_t UART_COMMAND_TASK;
-bool awaitingCommand = false;	// Commands have to be transmitted in the form of "+++COMMAND+++"
+bool awaitingCommand = false;    	// Commands have to be transmitted in the form of "+++COMMAND+++"
 								// any "+++" in data transmission has to be faster than 125µs between each '+', otherwise transmission is aborted
+extern uint16_t functionCount;
 
 void HandleUartCommandTask()
 {
@@ -42,12 +55,12 @@ void HandleUartCommandTask()
 				ResetRXBuffer();
 			continue;
 		}
-		uint32_t timestamp = esp_log_timestamp();    // in ms
+		uint32_t timestamp = esp_log_timestamp();        // in ms
 		
 		
 		//Check command
 		int8_t detectedCommand = -1;
-		for(int i = 1 ; i < 8; i++)
+		for (int i = 1; i < 10; i++)
 		{
 			if (memcmp(COMMANDS[i], rxbuf, strlen(COMMANDS[i])) == 0)
 			{
@@ -58,8 +71,8 @@ void HandleUartCommandTask()
 		}
 		if (detectedCommand == -1)
 			if (urxlen == 3)			// NOP
-				detectedCommand = 0;	//
-		if (detectedCommand == -1)
+				detectedCommand = 0;    //
+		if(detectedCommand == -1)
 		{
 			ESP_LOGE(TAG, "No command detected!");
 			continue;
@@ -76,17 +89,20 @@ void HandleUartCommandTask()
 		//}
 		//uart_write_bytes(UART_NUM_0, (const char*)"\n", 1);
 		
-		
-		
-		switch(connectionState)
+		if(detectedCommand == STATUS_GET)
+		{
+			xTaskNotify(PRO_TASK, UART_StatusRequest, eSetValueWithOverwrite);
+			vTaskDelay(1 / portTICK_RATE_MS);
+			ResetRXBuffer();
+			lastUpdate = timestamp;
+			continue;
+		}
+		switch (connectionState)
 		{	
 		case Disconnected:
 			switch (detectedCommand)
 			{
 			case NOP:
-				break;
-			case STATUS_GET:
-				ESP_LOGI(TAG, "Status: Disconnected");
 				break;
 			case PING:
 				ESP_LOGI(TAG, "PONG");
@@ -103,6 +119,10 @@ void HandleUartCommandTask()
 				break;
 			case DATA:
 				break;
+			case QUERY:
+			case ALLOC_FUNCTIONS:
+				ESP_LOGI(TAG, "Can't execute command if not connected");
+				break;
 			case TRIGGER:
 				break;
 			}
@@ -112,8 +132,16 @@ void HandleUartCommandTask()
 			{
 			case NOP:
 				break;
-			case STATUS_GET:
-				ESP_LOGI(TAG, "Status: Connected");
+			case QUERY:
+				ESP_LOGI(TAG, "QUERY command received");
+				xTaskNotify(PRO_TASK, UART_Query, eSetValueWithOverwrite);
+				break;
+			case ALLOC_FUNCTIONS:
+				ESP_LOGI(TAG, "ALLOCATING:::");
+				allocReqLen = urxlen - 3 - dataStart;
+				ESP_LOGI(TAG, "Data received, length=%u", allocReqLen);
+				memcpy(&allocReqBuf[0], &rxbuf[15], allocReqLen);
+				xTaskNotify(PRO_TASK, UART_AllocRequest, eSetValueWithOverwrite);
 				break;
 			case PING:
 				ESP_LOGI(TAG, "PONG");
@@ -137,10 +165,11 @@ void HandleUartCommandTask()
 				ESP_LOGI(TAG, "Data received, length=%u", dataLen);
 				memcpy(&progBuf[0], &rxbuf[dataStart], dataLen);
 				
-				xTaskNotifyFromISR(PRO_TASK, UART_ReceptionComplete, eSetValueWithOverwrite, NULL);
+				xTaskNotify(PRO_TASK, UART_Data, eSetValueWithOverwrite);
 				break;
 			case TRIGGER:
-				ESP_LOGI(TAG, "Trigger %u activated", *(uint16_t*)&rxbuf[dataStart]);
+				ESP_LOGI(TAG, "Trigger %u activated", rxbuf[dataStart] << 8 | rxbuf[dataStart + 1]);
+				xTaskNotify(APP_MT_TASK, rxbuf[dataStart] << 8 | rxbuf[dataStart + 1], eSetValueWithOverwrite);
 				break;
 			}
 			break;
@@ -161,13 +190,15 @@ void ResetRXBuffer()
 
 void IRAM_ATTR UART_RX_ISR(void *arg)
 {
-	ets_printf(TAG, "ISR\n");
+	//ets_printf("ISR\n");
+	//ets_printf("o:%u, c:%u, f:%u, b:%u\n", UART0.int_st.rxfifo_ovf, UART0.int_st.at_cmd_char_det, UART0.int_st.rxfifo_full, UART0.int_st.brk_det);
+	//ets_printf("%u\n", UART0.int_st.val);
 	
-	if (UART0.int_st.rxfifo_ovf)
+	if(UART0.int_st.rxfifo_ovf)
 	{
 		uart_flush_input(UART_NUM_0);
 		uart_clear_intr_status(UART_NUM_0, UART_RXFIFO_OVF_INT_CLR | UART_RXFIFO_TOUT_INT_CLR);
-		ets_printf(TAG, "UART receive error!\n");
+		ets_printf("UART receive error!\n");
 		ResetRXBuffer();
 		UART0.int_ena.brk_det = 0;
 		return;
@@ -204,12 +235,13 @@ void IRAM_ATTR UART_RX_ISR(void *arg)
 		uart_clear_intr_status(UART_NUM_0, UART_RXFIFO_FULL_INT_CLR | UART_BRK_DET_INT_CLR);
 	}
 	
-	ets_printf(TAG, "ISR Done\n");
+	//uart_clear_intr_status(UART_NUM_0, UART_RXFIFO_FULL_INT_CLR | UART_RXFIFO_OVF_INT_CLR | UART_RXFIFO_TOUT_INT_CLR | UART_BRK_DET_INT_CLR | UART_AT_CMD_CHAR_DET_INT_CLR);
+	//ets_printf("ISR Done\n");
 }
 
 void Config_UART_Interface()
 {
-	xTaskCreatePinnedToCore(HandleUartCommandTask, "UART_COMMAND_TASK", 2048, NULL, 12, &UART_COMMAND_TASK, 1);
+	xTaskCreatePinnedToCore(HandleUartCommandTask, "UART_COMMAND_TASK", 2048, NULL, 12, &UART_COMMAND_TASK, PROTOCOL_CORE);
 	
 	/* Configure parameters of an UART driver,
 	 * communication pins and install the driver */
@@ -223,7 +255,7 @@ void Config_UART_Interface()
 	};
 	uart_param_config(UART_NUM_0, &uart_config);
 	
-	uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);    	//Set UART pins (using UART0 default pins ie no changes.)
+	uart_set_pin(UART_NUM_0, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);        	//Set UART pins (using UART0 default pins ie no changes.)
 	//uart_driver_install(UART_NUM_0, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart0_queue, 0);  							//Install UART driver, and get the queue.
 	uart_driver_install(UART_NUM_0, RX_RINGBUF_SIZE, 0, 0, NULL, 0);
   
@@ -234,7 +266,7 @@ void Config_UART_Interface()
 	//uart_disable_rx_ovf_intr(UART_NUM_0);
 	//UART_INT_ENA_REG
 	
-	UART0.int_ena.val =  UART_AT_CMD_CHAR_DET_INT_ENA | UART_RXFIFO_FULL_INT_ENA | UART_BRK_DET_INT_ENA;    // disable all unnecessary uart0 interrupts
+	UART0.int_ena.val =  UART_AT_CMD_CHAR_DET_INT_ENA | UART_RXFIFO_FULL_INT_ENA | UART_BRK_DET_INT_ENA;        // disable all unnecessary uart0 interrupts
 	
 	//uint32_t FullTreshold = 2;
 	////*(volatile uint32_t*)UART_CONF1_REG(0) = ((*(volatile uint32_t*)UART_CONF1_REG(0)) & 0xFFFFFF80) | (FullTreshold & 0x7F);
@@ -246,13 +278,16 @@ void Config_UART_Interface()
 	UART0.conf1.rx_tout_thrhd = ToutTicks;
 	UART0.mem_conf.rx_tout_thrhd_h3 = ToutTicks >> 7;
 	
-	uart_enable_pattern_det_intr(UART_NUM_0, '+', 3, 80000, 10, 10);   // min time between at_cmd-chars = 80e3 =^= 1ms
+	uart_enable_pattern_det_intr(UART_NUM_0, '+', 3, 80000, 10, 10);       // min time between at_cmd-chars = 80e3 =^= 1ms
 	
+	//UART0.int_ena.val =  UART_AT_CMD_CHAR_DET_INT_ENA | UART_RXFIFO_FULL_INT_ENA | UART_BRK_DET_INT_ENA;     // disable all unnecessary uart0 interrupts
 	//uart_enable_intr_mask(UART_NUM_0, UART_AT_CMD_CHAR_DET_INT_ENA | UART_RXFIFO_FULL_INT_ENA | UART_RXFIFO_TOUT_INT_ENA);  // enable pattern, overflow & timeout  interrupts
 
 	ESP_LOGI(TAG, "Func address: %x", (uint32_t)(void*)Config_UART_Interface);
-	vTaskDelay(10/portTICK_PERIOD_MS);
+	vTaskDelay(10 / portTICK_PERIOD_MS);
+	//xSemaphoreTake(printSemaphore, portMAX_DELAY);
 	uart_write_bytes(UART_NUM_0, (const char*)"Config done\n", 12);
+	//xSemaphoreGive(printSemaphore);
 	
 	//uint32_t time0 = esp_log_timestamp();
 	//uint32_t time1 = esp_log_timestamp();

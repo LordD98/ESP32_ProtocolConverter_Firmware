@@ -1,4 +1,5 @@
 
+#include "main.h"
 #include "Task_APP.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -7,11 +8,122 @@
 
 #define TAG "APP_TASK"
 
+TaskHandle_t APP_MT_TASK;
+
+uint16_t *functionResourceReferenceAssociations; // List with manual trigger resource references, index represents userFunction
+int16_t initFunction; // index of init userfunction
+uint16_t functionCount;
+void **userFunctions;
+uint32_t *userData;
+
 void vAppTask(void *pvParameters)
 {
+	functionResourceReferenceAssociations = NULL;
+	initFunction = -1;
+	userFunctions = NULL;
+	userData = NULL;
+	xTaskCreatePinnedToCore(vManualTriggerTask, "CORE0_MT_TASK", 512, NULL, 12, &APP_MT_TASK, APP_CORE);
+
+	while (1)
+	{
+		uint32_t notVal;
+		if (xTaskNotifyWait(0, 0, &notVal, portMAX_DELAY) != pdPASS)
+			continue;
+			
+		void(*f)() = userFunctions[notVal];
+		f();
+		//ESP_LOGI(TAG, "Function %p activated", f);
+	}
+}
+
+void vManualTriggerTask(void *pvParameters)
+{
+	functionResourceReferenceAssociations = NULL;
+	userFunctions = NULL;
+	userData = NULL;
+
+	while (1)
+	{
+		uint32_t notVal;
+		uint16_t triggerResourceRef;
+		if (xTaskNotifyWait(0, 0, &notVal, portMAX_DELAY) != pdPASS)
+			continue;
+		
+		triggerResourceRef = notVal;
+
+		for (int i = 0; i < functionCount; i++)
+		{
+			if (functionResourceReferenceAssociations[i] == triggerResourceRef)
+			{
+				xTaskNotify(APP_TASK, i, eSetValueWithOverwrite);
+				goto success;
+			}
+		}
+		ESP_LOGE(TAG, "Trigger resource reference unknown");
+success:
+		continue;
+	}
+}
+
+
+/*
+
+#include "driver/gpio.h"
+
+#define TestGPIO 0
+void vAppTaskTest(void *pvParameters)
+{
+	volatile uint32_t constant0 = 1;
+
+	volatile uint32_t constant =  0x98765431;
+	printf("%u\n", constant);
+
+	volatile uint32_t constant2 =  constant0 << 25;
+	printf("%u\n", constant2);
+
+	volatile uint32_t constant3 =  constant0 << 1;
+	printf("%u\n", constant3);
+
+	volatile uint32_t constant4 =  constant0 << 6 | constant0 << 8;
+	printf("%u\n", constant4);
+
+	constant4 |=  constant0 << 11;
+	printf("%u\n", constant4);
+
+	constant4 &=  ~(1 << 14);
+	printf("%u\n", constant4);
+
+	EnableGPIO_OutDriveHigh_Lower(TestGPIO);
+	gpio_set_level(TestGPIO, 1);				// Should work
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+	gpio_set_level(TestGPIO, 0);
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+
+	DisableGPIO_Lower(TestGPIO);
+	gpio_set_level(TestGPIO, 1);				// Should not work
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+	gpio_set_level(TestGPIO, 0);
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+	
+	EnableGPIO_OutDriveHigh_Lower(TestGPIO);
+	gpio_set_level(TestGPIO, 1);				// Should work
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+	gpio_set_level(TestGPIO, 0);
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+	
+	EnableGPIO_Input_Lower(TestGPIO);
+	gpio_set_level(TestGPIO, 1);				// Should not work
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+	gpio_set_level(TestGPIO, 0);
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+
+
+
+	vTaskDelete(NULL);
+
 	//p = heap_caps_malloc(sizeof(...), MALLOC_CAP_32BIT);
 	//heap_caps_free(p);
-	//*entryUserCode0 = 0; // 11110000 => 00100000 => 00000000
+	// *entryUserCode0 = 0; // 11110000 => 00100000 => 00000000
 	ESP_LOGI(TAG, "0");
 	vUserCode0();
 	ESP_LOGI(TAG, "1");
@@ -56,8 +168,8 @@ void vAppTask(void *pvParameters)
 	//uint32_t val = ALIGNED_READ(ptr); // fügt unnötige memw Instruktionen hinzu (2x), trotzdem besser als volatile
 	uint32_t val;
 	ALIGNED_READ(ptr, val);
-	//*(uint32_t*)(vUserCode1 + 16) = 0x00A032F0;    // 0x00 prevents jump
-	//*ptr = (uint32_t)0x00A032F0;     // 0x00 prevents jump
+	// *(uint32_t*)(vUserCode1 + 16) = 0x00A032F0;    // 0x00 prevents jump
+	// *ptr = (uint32_t)0x00A032F0;     // 0x00 prevents jump
 	ALIGNED_WRITE(ptr, 0x00A032F0);
 	ESP_LOGI(TAG, "5, %u", val);
 	for (int i = -1; i < 98 / 4; i++)
@@ -69,7 +181,7 @@ void vAppTask(void *pvParameters)
 		printf("%d: 0x%x\n", 4*i + 3, (data >> 24) & 0xFF); //
 	}
 	//ESP_LOGI(TAG, "6");
-	//*(uint8_t*)(vUserCode1 + 4) = 'o';
+	// *(uint8_t*)(vUserCode1 + 4) = 'o';
 	ESP_LOGI(TAG, "6");
 	(vUserCode1 + 12)();
 	ESP_LOGI(TAG, "7");
@@ -168,7 +280,8 @@ void vAppTask(void *pvParameters)
 	//while (1) ;
 }
 
-uint32_t call8FromAddresses(uint32_t origin, uint32_t target) // target has to be 32 bit aligned (entry), origin does not
+// target has to be 32 bit aligned (entry), origin does not
+uint32_t call8FromAddresses(uint32_t origin, uint32_t target)
 {
 	uint32_t roundedPC = origin & 0xFFFFFFFC;
 	int32_t difference = target - roundedPC - 4;
@@ -189,20 +302,20 @@ uint32_t call8FromAddresses(uint32_t origin, uint32_t target) // target has to b
 	//	return (((offset << 6) | 0x25) & 0x00FFFFFF);
 	//}
 
-	/*
-		(data & 0xFF) = i0			// first instruction byte as seen in disassembly
-		(data >> 8) & 0xFF) = i1
-		(data >> 16) & 0xFF) = i2
 
-		=> data = i2<<16 | i1<<8 | i0;
-
-		ie. entry =  0x36, 0x61, 0x0	// entry a1,0x30; 0x36 0x61 0x0 => 00110110 01100001 00000000 // vUserCode1 + 12
-
-	target: ENTRY (at 32bit boundary; ?524284 to 524288 bytes from PC)
-	target = (PC & 0xF..FC0) + SEXT(offset)<<2 + 4 // we can ignore sign extension, everything is handled by CPU since sign extension only matters if converted from 18 bit -> 32 bit. (We: 32 bit -> 18 bit)
-	
-	=> offset = ((target - (PC & 0xF..FC) - 4)>>2) & 0x3FFFF
-	*/
+	// 	(data & 0xFF) = i0			// first instruction byte as seen in disassembly
+	// 	(data >> 8) & 0xFF) = i1
+	// 	(data >> 16) & 0xFF) = i2
+	// 
+	// 	=> data = i2<<16 | i1<<8 | i0;
+	// 
+	// 	ie. entry =  0x36, 0x61, 0x0	// entry a1,0x30; 0x36 0x61 0x0 => 00110110 01100001 00000000 // vUserCode1 + 12
+	// 
+	// target: ENTRY (at 32bit boundary; ?524284 to 524288 bytes from PC)
+	// target = (PC & 0xF..FC0) + SEXT(offset)<<2 + 4 // we can ignore sign extension, everything is handled by CPU since sign extension only matters if converted from 18 bit -> 32 bit. (We: 32 bit -> 18 bit)
+	// 
+	// => offset = ((target - (PC & 0xF..FC) - 4)>>2) & 0x3FFFF
+	//
 }
 
 //uint32_t callX8FromAddresses(uint32_t origin, uint32_t target)
@@ -233,21 +346,21 @@ IRAM_ATTR void printInc()
 	printf("ASM: %u\n", count);
 	count++;
 }
-/* Not necessary & not valid
-saving a register to the stack: (32 bits)
-an => *sp
-inc sp
-...
-dec sp
-*sp => an
-*/
+// Not necessary & not valid
+// saving a register to the stack: (32 bits)
+// an => *sp
+// inc sp
+// ...
+// dec sp
+// *sp => an
 
 // Alternativ speicher mit malloc alloziieren, Werte: "asm = entry; ...; retw.n;"
 // entry a1, 0x30 // IMMER mit a1 (Konvention)
 // entry: 0x36 0x|6|1 0x00 => 006136 => 000000000110(0x30 >> 3 = 0x6) 0001(a1) 00110110(opcode ENTRY)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-label"
-IRAM_ATTR void vUserCode0() // instruction at this address exactly is "entry" = 3 bytes
+// instruction at this address exactly is "entry" = 3 bytes
+IRAM_ATTR void vUserCode0()
 {
 	//const char* ts1 = "test";
 	//goto entryUserCode1;
@@ -360,3 +473,92 @@ IRAM_ATTR void vUserCode7()
 	asm volatile("nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;");
 }
 #pragma GCC diagnostic pop
+
+*/
+
+
+// 0-31
+/*IRAM_ATTR*/ //void DisableGPIO_Lower(uint32_t gpioNum)
+/*
+{
+	*(volatile uint32_t*)GPIO_PIN_MUX_REG[gpioNum] &= ~(1U << 9);
+	*(volatile uint32_t*)GPIO_ENABLE_W1TC_REG = 1U << gpioNum;
+	*(volatile uint32_t*)(GPIO_FUNC0_OUT_SEL_CFG_REG + 4*gpioNum) = SIG_GPIO_OUT_IDX;
+}
+// 32-39
+void DisableGPIO_Upper(uint32_t gpioNum)
+{
+	*(volatile uint32_t*)GPIO_PIN_MUX_REG[gpioNum] &= ~(1U << 9);
+	*(volatile uint32_t*)GPIO_ENABLE1_W1TC_REG = 1U << (gpioNum-32);
+	*(volatile uint32_t*)(GPIO_FUNC0_OUT_SEL_CFG_REG + 4*gpioNum) = SIG_GPIO_OUT_IDX;
+}
+
+// 0-31
+void EnableGPIO_OutDriveHigh_Lower(uint32_t gpioNum)
+{
+	//uint32_t val = 0;
+	//ALIGNED_READ(GPIO_PIN_MUX_REG[gpioNum], val);
+	//val &= ~(1U << 9);
+	//ALIGNED_WRITE(GPIO_PIN_MUX_REG[gpioNum], val);
+	//ALIGNED_READ(GPIO_PIN0_REG + 4U * gpioNum, val);
+	//ALIGNED_WRITE(GPIO_PIN0_REG + 4U * gpioNum, val & ~(1U << 2));
+	//val = 1U << gpioNum;
+	////ALIGNED_WRITE(GPIO_ENABLE_W1TS_REG, val);
+	//__atomic_store_n((uint32_t*)GPIO_ENABLE_W1TS_REG, (uint32_t)val, __ATOMIC_RELAXED);
+	//val = SIG_GPIO_OUT_IDX;
+	//ALIGNED_WRITE(GPIO_FUNC0_OUT_SEL_CFG_REG + 4U * gpioNum, val);
+
+	*(volatile uint32_t*)GPIO_PIN_MUX_REG[gpioNum] &= ~(1U << 9);
+	*(volatile uint32_t*)(GPIO_PIN0_REG + 4U * gpioNum) &= ~(1U << 2);
+	*(volatile uint32_t*)GPIO_ENABLE_W1TS_REG = 1U << gpioNum;
+	*(volatile uint32_t*)(GPIO_FUNC0_OUT_SEL_CFG_REG + 4U * gpioNum) = SIG_GPIO_OUT_IDX;
+}				
+
+// 32-39
+void EnableGPIO_OutDriveHigh_Upper(uint32_t gpioNum)
+{
+	*(volatile uint32_t*)GPIO_PIN_MUX_REG[gpioNum] &= ~(1U << 9);
+	*(volatile uint32_t*)(GPIO_PIN0_REG + 4U * gpioNum) &= ~(1U << 2);
+	*(volatile uint32_t*)GPIO_ENABLE1_W1TS_REG = 1U << (gpioNum-32);
+	*(volatile uint32_t*)(GPIO_FUNC0_OUT_SEL_CFG_REG + 4U * gpioNum) = SIG_GPIO_OUT_IDX;
+}
+
+// 0-31
+void EnableGPIO_Input_Lower(uint32_t gpioNum)
+{ 
+	*(volatile uint32_t*)GPIO_ENABLE_W1TC_REG = 1U << gpioNum;
+	*(volatile uint32_t*)(GPIO_FUNC0_OUT_SEL_CFG_REG + 4U * gpioNum) = SIG_GPIO_OUT_IDX;
+	*(volatile uint32_t*)GPIO_PIN_MUX_REG[gpioNum] |= (1U << 9);
+}
+
+// 32-39
+void EnableGPIO_Input_Upper(uint32_t gpioNum)
+{ 
+	*(volatile uint32_t*)GPIO_ENABLE1_W1TC_REG = 1U << (gpioNum - 32);
+	*(volatile uint32_t*)(GPIO_FUNC0_OUT_SEL_CFG_REG + 4U * gpioNum) = SIG_GPIO_OUT_IDX;
+	*(volatile uint32_t*)GPIO_PIN_MUX_REG[gpioNum] |= (1U << 9);
+}
+*/
+
+// gpio_set_level:
+//if(level)
+//{
+//	if (gpio_num < 32)
+//	{
+//		GPIO.out_w1ts = (1 << gpio_num);
+//	}
+//	else
+//	{
+//		GPIO.out1_w1ts.data = (1 << (gpio_num - 32));
+//	}
+//} else
+//{
+//	if (gpio_num < 32)
+//	{
+//		GPIO.out_w1tc = (1 << gpio_num);
+//	}
+//	else
+//	{
+//		GPIO.out1_w1tc.data = (1 << (gpio_num - 32));
+//	}
+//}

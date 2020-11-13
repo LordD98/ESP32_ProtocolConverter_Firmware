@@ -9,6 +9,7 @@
 
 // on APP CPU
 void vAppTask(void *pvParameters);
+void vManualTriggerTask(void *pvParameters);
 uint32_t call8FromAddresses(uint32_t origin, uint32_t target);
 void printInc();
 
@@ -22,3 +23,19 @@ void vUserCode4();
 void vUserCode5();
 void vUserCode6();
 void vUserCode7();
+
+extern uint16_t *functionResourceReferenceAssociations;
+extern int16_t initFunction;
+extern uint16_t functionCount;
+extern void **userFunctions;
+extern uint32_t *userData;
+
+//extern volatile uint32_t* GPIO_BASE_REG;
+//extern volatile uint32_t BIT_MASKS_SET[];
+//extern volatile uint32_t BIT_MASKS_CLEAR[];
+//void DisableGPIO_Lower(uint32_t gpioNum); // 0-31
+//void DisableGPIO_Upper(uint32_t gpioNum); // 32-39
+//void EnableGPIO_OutDriveHigh_Lower(uint32_t gpioNum); // 0-31
+//void EnableGPIO_OutDriveHigh_Upper(uint32_t gpioNum); // 32-39
+//void EnableGPIO_Input_Lower(uint32_t gpioNum); // 0-31
+//void EnableGPIO_Input_Upper(uint32_t gpioNum); // 32-39
