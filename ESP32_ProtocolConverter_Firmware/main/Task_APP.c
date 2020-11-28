@@ -10,11 +10,18 @@
 
 TaskHandle_t APP_MT_TASK;
 
-uint16_t *functionResourceReferenceAssociations; // List with manual trigger resource references, index represents userFunction
-int16_t initFunction; // index of init userfunction
+//uint16_t *constBufferResourceReferenceAssociations;		// List with const buffer (static) resource references, index represents buffer
+uint16_t *bufferResourceReferenceAssociations;			// List with buffer resource references, index represents buffer
+uint16_t *functionResourceReferenceAssociations;		// List with manual trigger resource references, index represents userFunction
+int16_t initFunction;									// index of initFunction code in "userFunctions"
+uint16_t constBufferCount;
+uint16_t bufferCount;
 uint16_t functionCount;
+RingBuffer **constBuffers;
+RingBuffer **buffers;
 void **userFunctions;
 uint32_t *userData;
+
 
 void vAppTask(void *pvParameters)
 {
@@ -22,6 +29,9 @@ void vAppTask(void *pvParameters)
 	initFunction = -1;
 	userFunctions = NULL;
 	userData = NULL;
+	
+	SetupProtocols();
+
 	xTaskCreatePinnedToCore(vManualTriggerTask, "CORE0_MT_TASK", 512, NULL, 12, &APP_MT_TASK, APP_CORE);
 
 	while (1)
@@ -32,7 +42,7 @@ void vAppTask(void *pvParameters)
 			
 		void(*f)() = userFunctions[notVal];
 		f();
-		//ESP_LOGI(TAG, "Function %p activated", f);
+		ESP_LOGI(TAG, "Function %p completed", f);
 	}
 }
 

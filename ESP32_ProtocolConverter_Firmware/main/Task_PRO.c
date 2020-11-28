@@ -6,6 +6,7 @@
 #include "UART_Interface.h"
 #include "Deserialize.h"
 #include "string.h"
+#include "setup.h"
 
 static const char *TAG = "PRO_TASK";
 
@@ -92,9 +93,9 @@ static void HandleUARTQuery()
 	ESP_LOGI(TAG, "Handle UART query");
 	vTaskDelay(10 / portTICK_PERIOD_MS);
 	// response length is 10 + 6*N; N is number of returned pointers
-	const uint16_t N = 1;
+	const uint16_t N = 3;
 	uint8_t responseBuffer[16 + 6*N]; // 6 chars extra for '+++'
-	void* pointers[] = { ets_delay_us };
+	void* pointers[] = { ets_delay_us, &I2C0_Data, &I2C1_Data };
 	
 	responseBuffer[0] = '+';
 	responseBuffer[1] = '+'; 
@@ -107,7 +108,7 @@ static void HandleUARTQuery()
 	responseBuffer[6] = length;
 
 	responseBuffer[7] = 0;											// Version	// TODO: Move to global header: global_defs.h (main.h)
-	responseBuffer[8] = 2;											// 0.2
+	responseBuffer[8] = 3;											// 0.3
 
 	responseBuffer[9] = N >> 8;										// N Pointers
 	responseBuffer[10] = N;											//
@@ -169,58 +170,104 @@ static void HandleUARTAllocRequest()
 		return;
 	}
 	
+	//free(constBufferResourceReferenceAssociations);
+	free(bufferResourceReferenceAssociations);
 	free(functionResourceReferenceAssociations);
+
+	for (int i = 0; i < constBufferCount; i++)
+	{
+		free(constBuffers[i]);
+	}
+	for (int i = 0; i < bufferCount; i++)
+	{
+		free(buffers[i]);
+	}
 	free(userFunctions);
 	heap_caps_free(userData);
 	
+
 	uint32_t dataLength = allocReqBuf[0] << 24 | allocReqBuf[1] << 16 | allocReqBuf[2] << 8 | allocReqBuf[3];
 	
-	uint16_t numFunctions = allocReqBuf[4] << 8 | allocReqBuf[5];
+	uint16_t numConstBuffers = allocReqBuf[4] << 8 | allocReqBuf[5];
+	uint16_t numBuffers = allocReqBuf[6 + 4*numConstBuffers] << 8 | allocReqBuf[7 + 4*numConstBuffers];
+	uint16_t numConstants = allocReqBuf[8 + 4*(numConstBuffers + numBuffers)] << 8 | allocReqBuf[9 + 4*(numConstBuffers + numBuffers)];
+	uint16_t numFunctions = allocReqBuf[10 + 4*(numConstBuffers + numBuffers)] << 8 | allocReqBuf[11 + 4*(numConstBuffers + numBuffers)];
+	
+	if (dataLength != 8 + 4*(numConstBuffers + numBuffers + numFunctions))
+	{
+		ESP_LOGE(TAG, "Received allocation request is invalid");
+		return;
+	}
+	
+	constBufferCount = numConstBuffers;
+	bufferCount = numBuffers;
 	functionCount = numFunctions;
+	
+	//constBufferResourceReferenceAssociations = (uint16_t*)malloc(numConstBuffers * sizeof(uint16_t));
+	constBuffers = (RingBuffer**)malloc(sizeof(void*)*numConstBuffers);
+	bufferResourceReferenceAssociations = (uint16_t*)malloc(numBuffers * sizeof(uint16_t));
+	buffers = (RingBuffer**)malloc(sizeof(void*)*numBuffers);
 	functionResourceReferenceAssociations = (uint16_t*)malloc(numFunctions * sizeof(uint16_t));
 	userFunctions = (void**)malloc(sizeof(void*)*numFunctions);
 
 
-	// response length is 8 + 4*N; (2 length + 4 data Pointer + 2 CRC); N is number of returned function pointers
-	uint8_t responseBuffer[14 + 4*functionCount];   // 6 chars extra for '+++'
+	// response length is 12 + 4*N;		N is number of returned function pointers
+	uint8_t responseBuffer[18 + 4*(functionCount + constBufferCount + bufferCount)];     // 6 chars extra for '+++'
 	
-	// Old data allocation:
-	//uint32_t dataAddress = (uint32_t)heap_caps_malloc(((dataLength + 1) / 4)*sizeof(uint32_t), MALLOC_CAP_32BIT | MALLOC_CAP_EXEC);
-	//
-	//for (uint32_t i = 0; i < numFunctions; i++)
-	//{
-	//	uint32_t functionLength = allocReqBuf[4*i + 6] << 24 | allocReqBuf[4*i + 7] << 16 | allocReqBuf[4*i + 8] << 8 | allocReqBuf[4*i + 9];
-	//	uint32_t address = (uint32_t)heap_caps_malloc(((functionLength+1)/4)*sizeof(uint32_t), MALLOC_CAP_32BIT | MALLOC_CAP_EXEC);
-	//	userFunctions[i] = (void*)address;
-	//	responseBuffer[4*i + 9] = address >> 24;
-	//	responseBuffer[4*i + 10] = address >> 16;
-	//	responseBuffer[4*i + 11] = address >> 8;
-	//	responseBuffer[4*i + 12] = address;
-	//}
 	
-	// New data allocation:
-	uint32_t totalLength = dataLength;
-	totalLength = ((uint32_t)((totalLength+3)/4))*4; // ceil to multiple of 4
+	for(uint32_t i = 0 ; i < constBufferCount ; i++)
+	{
+		uint32_t constBufferLength = allocReqBuf[4*i + 6] << 24 | allocReqBuf[4*i + 7] << 16 | allocReqBuf[4*i + 8] << 8 | allocReqBuf[4*i + 9];
+		constBuffers[i] = malloc(sizeof(RingBuffer) + sizeof(uint8_t)*(constBufferLength+1));
+		constBuffers[i]->length = constBufferLength + 1;
+		constBuffers[i]->readCursor = 0;
+		constBuffers[i]->writeCursor = 0;
+
+		responseBuffer[4*i + 5] = (uint32_t)constBuffers[i] >> 24;
+		responseBuffer[4*i + 6] = (uint32_t)constBuffers[i] >> 16;
+		responseBuffer[4*i + 7] = (uint32_t)constBuffers[i] >> 8;
+		responseBuffer[4*i + 8] = (uint32_t)constBuffers[i];
+	}
+
+	for (uint32_t i = 0; i < bufferCount; i++)
+	{
+		uint32_t bufferLength = allocReqBuf[4*(i + constBufferCount) + 8] << 24 | allocReqBuf[4*(i + constBufferCount) + 9] << 16 | allocReqBuf[4*(i + constBufferCount) + 10] << 8 | allocReqBuf[4*(i + constBufferCount) + 11];
+		buffers[i] = malloc(sizeof(RingBuffer) + sizeof(uint8_t)*(bufferLength+1));
+		buffers[i]->length = bufferLength + 1;
+		buffers[i]->readCursor = 0;
+		buffers[i]->writeCursor = 0;
+
+		responseBuffer[4*(i + constBufferCount) + 7] = (uint32_t)buffers[i] >> 24;
+		responseBuffer[4*(i + constBufferCount) + 8] = (uint32_t)buffers[i] >> 16;
+		responseBuffer[4*(i + constBufferCount) + 9] = (uint32_t)buffers[i] >> 8;
+		responseBuffer[4*(i + constBufferCount) + 10] = (uint32_t)buffers[i];
+	}
+
+
+
+	// Data&Function space calculation:
+	uint32_t totalLength = 4*numConstants;
 	uint32_t currentFunctionAddress = totalLength;
 	for (uint32_t i = 0; i < numFunctions; i++)
 	{
-		uint32_t functionLength = allocReqBuf[4*i + 6] << 24 | allocReqBuf[4*i + 7] << 16 | allocReqBuf[4*i + 8] << 8 | allocReqBuf[4*i + 9];
+		uint32_t functionLength = allocReqBuf[4*(i + constBufferCount + bufferCount) + 12] << 24 | allocReqBuf[4*(i + constBufferCount + bufferCount) + 13] << 16 | allocReqBuf[4*(i + constBufferCount + bufferCount) + 14] << 8 | allocReqBuf[4*(i + constBufferCount + bufferCount) + 15];
 		functionLength = ((uint32_t)((functionLength+3)/4))*4; // ceil to multiple of 4
 		totalLength += functionLength;
 	}
 
+	// Data&Function space allocation:
 	uint32_t dataAddress = (uint32_t)heap_caps_malloc(totalLength, MALLOC_CAP_32BIT | MALLOC_CAP_EXEC);
 	userData = (uint32_t*)dataAddress;
 	currentFunctionAddress += dataAddress;
 	for (uint32_t i = 0; i < numFunctions; i++)
 	{
 		userFunctions[i] = (void*)currentFunctionAddress;
-		responseBuffer[4*i + 9] = currentFunctionAddress >> 24;
-		responseBuffer[4*i + 10] = currentFunctionAddress >> 16;
-		responseBuffer[4*i + 11] = currentFunctionAddress >> 8;
-		responseBuffer[4*i + 12] = currentFunctionAddress;
+		responseBuffer[4*(i + constBufferCount + bufferCount) + 13] = currentFunctionAddress >> 24;
+		responseBuffer[4*(i + constBufferCount + bufferCount) + 14] = currentFunctionAddress >> 16;
+		responseBuffer[4*(i + constBufferCount + bufferCount) + 15] = currentFunctionAddress >> 8;
+		responseBuffer[4*(i + constBufferCount + bufferCount) + 16] = currentFunctionAddress;
 
-		uint32_t functionLength = allocReqBuf[4*i + 6] << 24 | allocReqBuf[4*i + 7] << 16 | allocReqBuf[4*i + 8] << 8 | allocReqBuf[4*i + 9];
+		uint32_t functionLength = allocReqBuf[4*(i + constBufferCount + bufferCount) + 12] << 24 | allocReqBuf[4*(i + constBufferCount + bufferCount) + 13] << 16 | allocReqBuf[4*(i + constBufferCount + bufferCount) + 14] << 8 | allocReqBuf[4*(i + constBufferCount + bufferCount) + 15];
 		functionLength = ((uint32_t)((functionLength+3)/4))*4; // ceil to multiple of 4
 		currentFunctionAddress += functionLength;
 	}
@@ -230,25 +277,31 @@ static void HandleUARTAllocRequest()
 	responseBuffer[1] = '+'; 
 	responseBuffer[2] = '+';
 	
-	responseBuffer[3] = dataAddress >> 24;
-	responseBuffer[4] = dataAddress >> 16;
-	responseBuffer[5] = dataAddress >> 8;
-	responseBuffer[6] = dataAddress;
+	responseBuffer[3] = constBufferCount >> 8;
+	responseBuffer[4] = constBufferCount;
 
-	responseBuffer[7] = numFunctions>>8;
-	responseBuffer[8] = numFunctions;
+	responseBuffer[5 + 4*constBufferCount] = bufferCount >> 8;
+	responseBuffer[6 + 4*constBufferCount] = bufferCount;
+
+	responseBuffer[7 + 4*(constBufferCount + bufferCount)] = dataAddress >> 24;
+	responseBuffer[8 + 4*(constBufferCount + bufferCount)] = dataAddress >> 16 ;
+	responseBuffer[9 + 4*(constBufferCount + bufferCount)] = dataAddress >> 8;
+	responseBuffer[10 + 4*(constBufferCount + bufferCount)] = dataAddress;
+
+	responseBuffer[11 + 4*(constBufferCount + bufferCount)] = functionCount >> 8;
+	responseBuffer[12 + 4*(constBufferCount + bufferCount)] = functionCount;
 
 	
-	uint32_t crc = CRC16_CCITT_FALSE(responseBuffer + 3, 4*numFunctions + 6);
-	responseBuffer[4*numFunctions + 9] = crc >> 8;
-	responseBuffer[4*numFunctions + 10] = crc;
+	uint32_t crc = CRC16_CCITT_FALSE(responseBuffer + 3, 4*(constBufferCount + bufferCount + functionCount) + 10);
+	responseBuffer[4*(constBufferCount + bufferCount + functionCount) + 13] = crc >> 8;
+	responseBuffer[4*(constBufferCount + bufferCount + functionCount) + 14] = crc;
 
-	responseBuffer[4*numFunctions + 11] = '+';
-	responseBuffer[4*numFunctions + 12] = '+';
-	responseBuffer[4*numFunctions + 13] = '+';
+	responseBuffer[4*(constBufferCount + bufferCount + functionCount) + 15] = '+';
+	responseBuffer[4*(constBufferCount + bufferCount + functionCount) + 16] = '+';
+	responseBuffer[4*(constBufferCount + bufferCount + functionCount) + 17] = '+';
 	
 	//xSemaphoreTake(printSemaphore, portMAX_DELAY);
-	uart_write_bytes(UART_NUM_0, (const char*)responseBuffer, 4*numFunctions + 14);
+	uart_write_bytes(UART_NUM_0, (const char*)responseBuffer, 4 * (constBufferCount + bufferCount + functionCount) + 18);
 	uart_write_bytes(UART_NUM_0, "\r\n", 1);
 	//xSemaphoreGive(printSemaphore);
 

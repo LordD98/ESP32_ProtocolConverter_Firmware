@@ -227,7 +227,7 @@
     <DebugMethod>
       <ID>openocd</ID>
       <Configuration xsi:type="com.visualgdb.edp.openocd.settings.esp32">
-        <CommandLine>-f interface/ftdi/incircuit-icprog.cfg -c "adapter_khz 10000" -f target/esp32.cfg</CommandLine>
+        <CommandLine>-f interface/ftdi/incircuit-icprog.cfg -c "adapter_khz 1000" -f target/esp32.cfg</CommandLine>
         <ExtraParameters>
           <Frequency xsi:nil="true" />
           <BoostedFrequency xsi:nil="true" />

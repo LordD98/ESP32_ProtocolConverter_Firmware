@@ -6,7 +6,6 @@
 
 
 static const char *TAG = "Deserializer";
-//ModuleBlockCode mbc;
 
 void Deserialize(uint8_t buf[], uint16_t len)
 {
@@ -75,6 +74,28 @@ uint32_t readUint32(uint8_t **buf)
 	return result;
 }
 
+uint64_t readUint64(uint8_t **buf)
+{
+	uint64_t result = (**buf << 56);
+	(*buf)++;
+	result |= **buf << 48;
+	(*buf)++;
+	result |= **buf << 40;
+	(*buf)++;
+	result |= **buf << 32;
+	(*buf)++;
+	result |= **buf << 24;
+	(*buf)++;
+	result |= **buf << 16;
+	(*buf)++;
+	result |= **buf << 8;
+	(*buf)++;
+	result |= **buf;
+	(*buf)++;
+	
+	return result;
+}
+
 #include <inttypes.h>
 void readFunctionList(uint8_t **buf)
 {
@@ -94,6 +115,7 @@ void readFunctionList(uint8_t **buf)
 	*/
 	
 	uint16_t functionCount = readUint16(buf);
+	//ESP_LOGI(TAG, "funcCount: %u", functionCount);
 
 	for (int i = 0; i < functionCount; i++)
 	{
@@ -199,16 +221,48 @@ void readData(uint8_t **buf)
 void readBufferManager(uint8_t **buf)
 {
 	uint32_t size = readUint32(buf);
-	if (size < 2)
+	if (size < 1)
 	{
 		ESP_LOGE(TAG, "Invalid buffer size");
 		return;	
 	}
+	
+	uint16_t constBufferCount = readUint16(buf);
+	size -= 2;
+	for (int i = 0; i<constBufferCount; i++)
+	{
+		uint32_t constBufSize = readUint32(buf);
+		size -= 4;
+		readUint16(buf);  // StaticResourceReference
+		size -= 2;
+		uint32_t byteCount = readUint32(buf);
+		size -= 4;
+		if (byteCount+1 != constBuffers[i]->length)
+		{
+			ESP_LOGE(TAG, "Size of constBuffer does not match allocation request");
+			return;	
+		}
+		for (int j = 0; j<byteCount; j++) // read data
+		{
+			uint8_t numBits = readUint8(buf);
+			size -= 1;
+			uint64_t value = readUint64(buf);
+			size -= 8;
+			if (numBits != 8)
+			{
+				ESP_LOGE(TAG, "BitCount must be 8");
+				return;	
+			}
+			constBuffers[i]->data[j] = (uint8_t)value;
+		}
+	}
+
 	uint16_t bufferCount = readUint16(buf);
 	size -= 2;
-		
 	while (bufferCount != 0)
 	{
+		uint16_t bufResRef = readUint16(buf);    // DynamicResourceReference
+		size -= 2;
 		uint32_t bufSize = readUint32(buf);
 		size -= 4;
 		BufferType type = readUint8(buf);

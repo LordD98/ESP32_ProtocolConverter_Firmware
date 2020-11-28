@@ -137,9 +137,9 @@ void HandleUartCommandTask()
 				xTaskNotify(PRO_TASK, UART_Query, eSetValueWithOverwrite);
 				break;
 			case ALLOC_FUNCTIONS:
-				ESP_LOGI(TAG, "ALLOCATING:::");
+				//ESP_LOGI(TAG, "ALLOCATING:::");
 				allocReqLen = urxlen - 3 - dataStart;
-				ESP_LOGI(TAG, "Data received, length=%u", allocReqLen);
+				//ESP_LOGI(TAG, "Data received, length=%u", allocReqLen);
 				memcpy(&allocReqBuf[0], &rxbuf[15], allocReqLen);
 				xTaskNotify(PRO_TASK, UART_AllocRequest, eSetValueWithOverwrite);
 				break;
@@ -162,13 +162,13 @@ void HandleUartCommandTask()
 				}
 			case DATA:
 				dataLen = urxlen - 3 - dataStart;
-				ESP_LOGI(TAG, "Data received, length=%u", dataLen);
+				//ESP_LOGI(TAG, "Data received, length=%u", dataLen);
 				memcpy(&progBuf[0], &rxbuf[dataStart], dataLen);
 				
 				xTaskNotify(PRO_TASK, UART_Data, eSetValueWithOverwrite);
 				break;
 			case TRIGGER:
-				ESP_LOGI(TAG, "Trigger %u activated", rxbuf[dataStart] << 8 | rxbuf[dataStart + 1]);
+				//ESP_LOGI(TAG, "Trigger %u activated", rxbuf[dataStart] << 8 | rxbuf[dataStart + 1]);
 				xTaskNotify(APP_MT_TASK, rxbuf[dataStart] << 8 | rxbuf[dataStart + 1], eSetValueWithOverwrite);
 				break;
 			}

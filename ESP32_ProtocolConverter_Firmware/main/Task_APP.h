@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "setup.h"
 
 //#define ALIGNED_READ(PTR) __atomic_load_n(PTR, __ATOMIC_RELAXED)
 //#define ALIGNED_WRITE(PTR, VAL) __atomic_store_n(PTR, (uint32_t)VAL, __ATOMIC_RELAXED)
@@ -24,9 +25,18 @@ void vUserCode5();
 void vUserCode6();
 void vUserCode7();
 
+//extern uint16_t *constBufferResourceReferenceAssociations;
+extern uint16_t *bufferResourceReferenceAssociations;
 extern uint16_t *functionResourceReferenceAssociations;
+
 extern int16_t initFunction;
+
+extern uint16_t constBufferCount;
+extern uint16_t bufferCount;
 extern uint16_t functionCount;
+
+extern RingBuffer **constBuffers;
+extern RingBuffer **buffers;
 extern void **userFunctions;
 extern uint32_t *userData;
 

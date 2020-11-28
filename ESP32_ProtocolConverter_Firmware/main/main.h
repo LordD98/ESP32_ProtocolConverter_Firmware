@@ -6,7 +6,7 @@
 //SemaphoreHandle_t printSemaphore;
 
 #define APP_CORE 0			// 0
-#define PROTOCOL_CORE 0		// 1
+#define PROTOCOL_CORE 1		// 1
 
 
 extern TaskHandle_t PRO_TASK;

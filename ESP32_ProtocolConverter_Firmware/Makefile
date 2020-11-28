@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := uart_events
+PROJECT_NAME := ProtocolConverter_Firmware
 
 include $(IDF_PATH)/make/project.mk
 
